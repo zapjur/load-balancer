@@ -6,6 +6,7 @@
 
 #define DEFAULT_PORT 9003
 #define BUFFER_SIZE 1024
+#define PREFIX_BUFFER 256
 
 void fatal(const char *msg) {
     perror(msg);
@@ -18,8 +19,14 @@ int main(int argc, char *argv[]) {
     socklen_t client_addr_len = sizeof(client_addr);
     int port = DEFAULT_PORT;
 
-    if (argc == 2) {
+    char prefix[PREFIX_BUFFER] = "";
+
+    if (argc >= 2) {
         port = atoi(argv[1]);
+    }
+
+    if (argc >= 3) {
+        snprintf(prefix, PREFIX_BUFFER, "%s ", argv[2]);
     }
 
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
@@ -52,7 +59,10 @@ int main(int argc, char *argv[]) {
         ssize_t bytes_received;
 
         while ((bytes_received = recv(client_fd, buffer, sizeof(buffer), 0)) > 0) {
-            send(client_fd, buffer, bytes_received, 0);
+            buffer[bytes_received] = '\0';
+            char response[BUFFER_SIZE + PREFIX_BUFFER];
+            snprintf(response, sizeof(response), "%s%s", prefix, buffer);
+            send(client_fd, response, strlen(response), 0);
         }
 
         if (bytes_received < 0) {

@@ -18,7 +18,7 @@ services:
     container_name: backend1
     ports:
       - "9001:9001"
-    command: ["./simple_backend", "9001"]
+    command: ["./simple_backend", "9001", "Backend 1"]
     networks:
       - lbnet
 
@@ -28,7 +28,7 @@ services:
     container_name: backend2
     ports:
       - "9002:9001"
-    command: ["./simple_backend", "9001"]
+    command: ["./simple_backend", "9001", "Backend 2"]
     networks:
       - lbnet
 
@@ -38,7 +38,7 @@ services:
     container_name: backend3
     ports:
       - "9003:9003"
-    command: ["./echo_backend", "9003"]
+    command: ["./echo_backend", "9003", "Echo 3:"]
     networks:
       - lbnet
 

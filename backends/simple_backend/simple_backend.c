@@ -6,7 +6,7 @@
 
 #define PORT 9001
 #define BUFFER_SIZE 1024
-#define RESPONSE "Hello from backend!\n"
+#define DEFAULT_RESPONSE "Hello from backend\n"
 
 void fatal(const char *msg) {
     perror(msg);
@@ -19,8 +19,14 @@ int main(int argc, char *argv[]) {
     socklen_t client_addr_len = sizeof(client_addr);
     int port = PORT;
 
-    if (argc == 2) {
+    char response[BUFFER_SIZE] = DEFAULT_RESPONSE;
+
+    if (argc >= 2) {
         port = atoi(argv[1]);
+    }
+
+    if (argc >= 3) {
+        snprintf(response, BUFFER_SIZE, "%s\n", argv[2]);
     }
 
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
@@ -49,7 +55,7 @@ int main(int argc, char *argv[]) {
         printf("Accepted connection from %s:%d\n",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-        send(client_fd, RESPONSE, strlen(RESPONSE), 0);
+        send(client_fd, response, strlen(response), 0);
 
         close(client_fd);
     }
