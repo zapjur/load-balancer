@@ -1,6 +1,17 @@
 version: '3.8'
 
 services:
+  loadbalancer:
+    build:
+      context: ./loadbalancer
+    container_name: loadbalancer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend1
+    networks:
+      - lbnet
+
   backend1:
     build:
       context: ./backends/simple_backend
