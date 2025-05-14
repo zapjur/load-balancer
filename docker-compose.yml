@@ -9,6 +9,9 @@ services:
       - "8080:8080"
     depends_on:
       - backend1
+      - backend2
+      - backend3
+      - backend4
     networks:
       - lbnet
 
@@ -16,8 +19,6 @@ services:
     build:
       context: ./backends/simple_backend
     container_name: backend1
-    ports:
-      - "9001:9001"
     command: ["./simple_backend", "9001", "Backend 1"]
     networks:
       - lbnet
@@ -26,8 +27,6 @@ services:
     build:
       context: ./backends/simple_backend
     container_name: backend2
-    ports:
-      - "9002:9001"
     command: ["./simple_backend", "9001", "Backend 2"]
     networks:
       - lbnet
@@ -36,9 +35,15 @@ services:
     build:
       context: ./backends/echo_backend
     container_name: backend3
-    ports:
-      - "9003:9003"
-    command: ["./echo_backend", "9003", "Echo 3:"]
+    command: ["./echo_backend", "9001", "Echo 3:"]
+    networks:
+      - lbnet
+
+  backend4:
+    build:
+      context: ./backends/echo_backend
+    container_name: backend4
+    command: [ "./echo_backend", "9001", "Echo 4:" ]
     networks:
       - lbnet
 

@@ -6,10 +6,9 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <netdb.h>
+#include "balancer.h"
 
 #define LISTEN_PORT 8080
-#define BACKEND_IP "backend1"
-#define BACKEND_PORT 9001
 #define BUFFER_SIZE 4096
 
 void fatal(const char *msg) {
@@ -45,6 +44,8 @@ int main() {
     struct sockaddr_in listen_addr, client_addr;
     socklen_t client_len = sizeof(client_addr);
 
+    init_backend_groups();
+
     listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd < 0) fatal("socket");
 
@@ -72,7 +73,18 @@ int main() {
         printf("Accepted connection from %s:%d\n",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-        backend_fd = connect_to_backend(BACKEND_IP, BACKEND_PORT);
+        const char *group = "simple";
+
+        Backend *backend = get_backend_for_group(group);
+        if (!backend) {
+            fprintf(stderr, "No backend found for group: %s\n", group);
+            close(client_fd);
+            continue;
+        }
+
+        increment_connections(backend);
+
+        backend_fd = connect_to_backend(backend->host, backend->port);
 
         fd_set fds;
         char buffer[BUFFER_SIZE];
@@ -102,6 +114,7 @@ int main() {
 
         close(client_fd);
         close(backend_fd);
+        decrement_connections(backend);
         printf("Connection closed.\n");
     }
 
