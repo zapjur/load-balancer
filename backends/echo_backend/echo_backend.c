@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 
 #define DEFAULT_PORT 9003
 #define BUFFER_SIZE 1024
@@ -13,8 +14,17 @@ void fatal(const char *msg) {
     exit(EXIT_FAILURE);
 }
 
+typedef struct {
+    int client_fd;
+    char prefix[PREFIX_BUFFER];
+    struct sockaddr_in client_addr;
+} ClientArgs;
+
+void *handle_client(void *arg);
+
+
 int main(int argc, char *argv[]) {
-    int server_fd, client_fd;
+    int server_fd;
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
     int port = DEFAULT_PORT;
@@ -48,29 +58,61 @@ int main(int argc, char *argv[]) {
 
     printf("Echo backend listening on port %d...\n", port);
 
-    while(1) {
-        if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len)) < 0)
+    while (1) {
+        int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len);
+        if (client_fd < 0)
             fatal("accept failed");
 
         printf("Accepted connection from %s:%d\n",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-        char buffer[BUFFER_SIZE];
-        ssize_t bytes_received;
+        ClientArgs *args = malloc(sizeof(ClientArgs));
+        args->client_fd = client_fd;
+        args->client_addr = client_addr;
+        strcpy(args->prefix, prefix);
 
-        while ((bytes_received = recv(client_fd, buffer, sizeof(buffer), 0)) > 0) {
-            buffer[bytes_received] = '\0';
-            char response[BUFFER_SIZE + PREFIX_BUFFER];
-            snprintf(response, sizeof(response), "%s%s", prefix, buffer);
-            send(client_fd, response, strlen(response), 0);
+        pthread_t tid;
+        if (pthread_create(&tid, NULL, handle_client, args) != 0) {
+            perror("pthread_create");
+            close(client_fd);
+            free(args);
+            continue;
         }
 
-        if (bytes_received < 0) {
-            perror("recv failed");
-        }
-
-        close(client_fd);
+        pthread_detach(tid);
     }
+
     close(server_fd);
     return 0;
+}
+
+void *handle_client(void *arg) {
+    ClientArgs *args = (ClientArgs *)arg;
+    int client_fd = args->client_fd;
+    char prefix[PREFIX_BUFFER];
+    strcpy(prefix, args->prefix);
+    struct sockaddr_in client_addr = args->client_addr;
+
+    free(args);
+
+    printf("Started thread for %s:%d\n",
+           inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+    char buffer[BUFFER_SIZE];
+    ssize_t bytes_received;
+
+    while ((bytes_received = recv(client_fd, buffer, sizeof(buffer), 0)) > 0) {
+        buffer[bytes_received] = '\0';
+        char response[BUFFER_SIZE + PREFIX_BUFFER];
+        snprintf(response, sizeof(response), "%s%s", prefix, buffer);
+        send(client_fd, response, strlen(response), 0);
+    }
+
+    if (bytes_received < 0)
+        perror("recv failed");
+
+    close(client_fd);
+    printf("Closed connection with %s:%d\n",
+           inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+    return NULL;
 }
