@@ -6,10 +6,18 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <netdb.h>
+#include <pthread.h>
 #include "balancer.h"
 
 #define LISTEN_PORT 8080
 #define BUFFER_SIZE 4096
+
+typedef struct {
+    int client_fd;
+    const char *group;
+} ThreadArgs;
+
+void *handle_client(void *arg);
 
 void fatal(const char *msg) {
     perror(msg);
@@ -40,7 +48,7 @@ int connect_to_backend(const char *ip, int port) {
 }
 
 int main() {
-    int listen_fd, client_fd, backend_fd;
+    int listen_fd, client_fd;
     struct sockaddr_in listen_addr, client_addr;
     socklen_t client_len = sizeof(client_addr);
 
@@ -67,57 +75,82 @@ int main() {
 
     while (1) {
         client_fd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
-        if (client_fd < 0)
-            fatal("accept");
+        if (client_fd < 0) {
+            perror("accept");
+            continue;
+        }
 
         printf("Accepted connection from %s:%d\n",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-        const char *group = "simple";
+        ThreadArgs *args = malloc(sizeof(ThreadArgs));
+        args->client_fd = client_fd;
+        args->group = "echo";
 
-        Backend *backend = get_backend_for_group(group);
-        if (!backend) {
-            fprintf(stderr, "No backend found for group: %s\n", group);
+        pthread_t tid;
+        if (pthread_create(&tid, NULL, handle_client, args) != 0) {
+            perror("pthread_create");
             close(client_fd);
+            free(args);
             continue;
         }
 
-        increment_connections(backend);
-
-        backend_fd = connect_to_backend(backend->host, backend->port);
-
-        fd_set fds;
-        char buffer[BUFFER_SIZE];
-        int maxfd = (client_fd > backend_fd ? client_fd : backend_fd) + 1;
-
-        while (1) {
-            FD_ZERO(&fds);
-            FD_SET(client_fd, &fds);
-            FD_SET(backend_fd, &fds);
-
-            int activity = select(maxfd, &fds, NULL, NULL, NULL);
-            if (activity < 0 && errno != EINTR)
-                break;
-
-            if (FD_ISSET(client_fd, &fds)) {
-                ssize_t n = recv(client_fd, buffer, BUFFER_SIZE, 0);
-                if (n <= 0) break;
-                send(backend_fd, buffer, n, 0);
-            }
-
-            if (FD_ISSET(backend_fd, &fds)) {
-                ssize_t n = recv(backend_fd, buffer, BUFFER_SIZE, 0);
-                if (n <= 0) break;
-                send(client_fd, buffer, n, 0);
-            }
-        }
-
-        close(client_fd);
-        close(backend_fd);
-        decrement_connections(backend);
-        printf("Connection closed.\n");
+        pthread_detach(tid);
     }
 
     close(listen_fd);
     return 0;
 }
+
+
+void *handle_client(void *arg) {
+    ThreadArgs *args = (ThreadArgs *)arg;
+    int client_fd = args->client_fd;
+    const char *group = args->group;
+    free(args);
+
+    Backend *backend = get_backend_for_group(group);
+    if (!backend) {
+        fprintf(stderr, "No backend found for group: %s\n", group);
+        close(client_fd);
+        return NULL;
+    }
+
+    increment_connections(backend);
+
+    int backend_fd = connect_to_backend(backend->host, backend->port);
+
+    fd_set fds;
+    char buffer[BUFFER_SIZE];
+    int maxfd = (client_fd > backend_fd ? client_fd : backend_fd) + 1;
+
+    while (1) {
+        FD_ZERO(&fds);
+        FD_SET(client_fd, &fds);
+        FD_SET(backend_fd, &fds);
+
+        int activity = select(maxfd, &fds, NULL, NULL, NULL);
+        if (activity < 0 && errno != EINTR)
+            break;
+
+        if (FD_ISSET(client_fd, &fds)) {
+            ssize_t n = recv(client_fd, buffer, BUFFER_SIZE, 0);
+            if (n <= 0) break;
+            send(backend_fd, buffer, n, 0);
+        }
+
+        if (FD_ISSET(backend_fd, &fds)) {
+            ssize_t n = recv(backend_fd, buffer, BUFFER_SIZE, 0);
+            if (n <= 0) break;
+            send(client_fd, buffer, n, 0);
+        }
+    }
+
+    close(client_fd);
+    close(backend_fd);
+    decrement_connections(backend);
+    printf("Connection closed.\n");
+
+    return NULL;
+}
+
