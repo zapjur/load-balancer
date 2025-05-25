@@ -9,13 +9,15 @@
 #include <pthread.h>
 #include "balancer.h"
 
-#define LISTEN_PORT 8080
+#define PORT_SIMPLE 8080
+#define PORT_ECHO 8081
 #define BUFFER_SIZE 4096
 
 typedef struct {
     int client_fd;
     const char *group;
 } ThreadArgs;
+
 
 void *handle_client(void *arg);
 
@@ -47,45 +49,72 @@ int connect_to_backend(const char *ip, int port) {
     return sockfd;
 }
 
-int main() {
-    int listen_fd, client_fd;
-    struct sockaddr_in listen_addr, client_addr;
-    socklen_t client_len = sizeof(client_addr);
-
-    init_backend_groups();
-
-    listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+int create_listener(int port) {
+    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd < 0) fatal("socket");
 
     int opt = 1;
     setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    memset(&listen_addr, 0, sizeof(listen_addr));
-    listen_addr.sin_family = AF_INET;
-    listen_addr.sin_addr.s_addr = INADDR_ANY;
-    listen_addr.sin_port = htons(LISTEN_PORT);
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(port);
 
-    if (bind(listen_fd, (struct sockaddr *)&listen_addr, sizeof(listen_addr)) < 0)
+    if (bind(listen_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
         fatal("bind");
 
-    if (listen(listen_fd, 5) < 0)
+    if (listen(listen_fd, 10) < 0)
         fatal("listen");
 
-    printf("Load Balancer listening on port %d...\n", LISTEN_PORT);
+    printf("Listening on port %d...\n", port);
+    return listen_fd;
+}
+
+int main() {
+    init_backend_groups();
+
+    int listen_fd_simple = create_listener(PORT_SIMPLE);
+    int listen_fd_echo   = create_listener(PORT_ECHO);
+
+    fd_set readfds;
+    int maxfd = (listen_fd_simple > listen_fd_echo ? listen_fd_simple : listen_fd_echo) + 1;
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
 
     while (1) {
-        client_fd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
+        FD_ZERO(&readfds);
+        FD_SET(listen_fd_simple, &readfds);
+        FD_SET(listen_fd_echo, &readfds);
+
+        if (select(maxfd, &readfds, NULL, NULL, NULL) < 0 && errno != EINTR)
+            fatal("select");
+
+        int client_fd;
+        const char *group;
+
+        if (FD_ISSET(listen_fd_simple, &readfds)) {
+            client_fd = accept(listen_fd_simple, (struct sockaddr *)&client_addr, &client_len);
+            group = "simple";
+        } else if (FD_ISSET(listen_fd_echo, &readfds)) {
+            client_fd = accept(listen_fd_echo, (struct sockaddr *)&client_addr, &client_len);
+            group = "echo";
+        } else {
+            continue;
+        }
+
         if (client_fd < 0) {
             perror("accept");
             continue;
         }
 
-        printf("Accepted connection from %s:%d\n",
-               inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+        printf("Accepted from %s:%d for group [%s]\n",
+               inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), group);
 
         ThreadArgs *args = malloc(sizeof(ThreadArgs));
         args->client_fd = client_fd;
-        args->group = "echo";
+        args->group = group;
 
         pthread_t tid;
         if (pthread_create(&tid, NULL, handle_client, args) != 0) {
@@ -97,11 +126,7 @@ int main() {
 
         pthread_detach(tid);
     }
-
-    close(listen_fd);
-    return 0;
 }
-
 
 void *handle_client(void *arg) {
     ThreadArgs *args = (ThreadArgs *)arg;
