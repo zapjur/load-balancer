@@ -1,8 +1,10 @@
 #include "balancer.h"
 #include <string.h>
+#include <pthread.h>
 
 static BackendGroup backend_groups[MAX_GROUPS];
 static int group_count = 0;
+static pthread_mutex_t conn_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void init_backend_groups() {
     BackendGroup simple = {
@@ -68,11 +70,14 @@ Backend *get_backend_for_group(const char *group_name) {
 }
 
 void increment_connections(Backend *b) {
+    pthread_mutex_lock(&conn_lock);
     b->active_connections++;
+    pthread_mutex_unlock(&conn_lock);
 }
 
 void decrement_connections(Backend *b) {
-    if (b->active_connections > 0) {
+    pthread_mutex_lock(&conn_lock);
+    if (b->active_connections > 0)
         b->active_connections--;
-    }
+    pthread_mutex_unlock(&conn_lock);
 }
