@@ -15,7 +15,7 @@ const (
 
 	simpleRate   = 1 * time.Second
 	echoRate     = 3 * time.Second
-	numEchoConns = 5
+	numEchoConns = 100
 )
 
 func sendSimpleLoop(wg *sync.WaitGroup) {

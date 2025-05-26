@@ -1,6 +1,8 @@
 #ifndef BALANCER_H
 #define BALANCER_H
 
+#include <pthread.h>
+
 #define MAX_BACKENDS 20
 #define MAX_GROUPS 10
 
@@ -29,5 +31,10 @@ Backend *get_backend_for_group(const char *group_name);
 void increment_connections(Backend *b);
 void decrement_connections(Backend *b);
 void *healthcheck_thread(void *arg);
+void *metrics_server(void *arg);
+
+extern BackendGroup backend_groups[MAX_GROUPS];
+extern int group_count;
+extern pthread_mutex_t conn_lock;
 
 #endif

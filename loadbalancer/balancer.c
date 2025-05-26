@@ -7,9 +7,9 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-static BackendGroup backend_groups[MAX_GROUPS];
-static int group_count = 0;
-static pthread_mutex_t conn_lock = PTHREAD_MUTEX_INITIALIZER;
+BackendGroup backend_groups[MAX_GROUPS];
+int group_count = 0;
+pthread_mutex_t conn_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void init_backend_groups() {
     FILE *file = fopen("backends.conf", "r");

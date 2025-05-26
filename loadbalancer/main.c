@@ -75,6 +75,9 @@ int create_listener(int port) {
 int main() {
     init_backend_groups();
 
+    pthread_t metrics_thread;
+    pthread_create(&metrics_thread, NULL, metrics_server, NULL);
+
     pthread_t hc_tid;
     pthread_create(&hc_tid, NULL, healthcheck_thread, NULL);
     pthread_detach(hc_tid);
