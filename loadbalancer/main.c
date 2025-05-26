@@ -75,6 +75,10 @@ int create_listener(int port) {
 int main() {
     init_backend_groups();
 
+    pthread_t hc_tid;
+    pthread_create(&hc_tid, NULL, healthcheck_thread, NULL);
+    pthread_detach(hc_tid);
+
     int listen_fd_simple = create_listener(PORT_SIMPLE);
     int listen_fd_echo   = create_listener(PORT_ECHO);
 

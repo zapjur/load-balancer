@@ -13,6 +13,7 @@ typedef struct {
     char *host;
     int port;
     int active_connections;
+    int is_alive;
 } Backend;
 
 typedef struct {
@@ -27,5 +28,6 @@ void init_backend_groups();
 Backend *get_backend_for_group(const char *group_name);
 void increment_connections(Backend *b);
 void decrement_connections(Backend *b);
+void *healthcheck_thread(void *arg);
 
 #endif
