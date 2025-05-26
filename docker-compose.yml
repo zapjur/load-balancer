@@ -9,42 +9,87 @@ services:
       - "8080:8080"
       - "8081:8081"
     depends_on:
-      - backend1
-      - backend2
-      - backend3
-      - backend4
+      - simple-backend1
+      - simple-backend2
+      - simple-backend3
+      - simple-backend4
+      - echo-backend1
+      - echo-backend2
+      - echo-backend3
+      - echo-backend4
+      - echo-backend5
     networks:
       - lbnet
 
-  backend1:
+  simple-backend1:
     build:
       context: ./backends/simple_backend
-    container_name: backend1
+    container_name: simple-backend1
     command: ["./simple_backend", "9001", "Backend 1"]
     networks:
       - lbnet
 
-  backend2:
+  simple-backend2:
     build:
       context: ./backends/simple_backend
-    container_name: backend2
+    container_name: simple-backend2
     command: ["./simple_backend", "9001", "Backend 2"]
     networks:
       - lbnet
 
-  backend3:
+  simple-backend3:
+    build:
+      context: ./backends/simple_backend
+    container_name: simple-backend3
+    command: ["./simple_backend", "9001", "Backend 3"]
+    networks:
+      - lbnet
+
+  simple-backend4:
+    build:
+      context: ./backends/simple_backend
+    container_name: simple-backend4
+    command: ["./simple_backend", "9001", "Backend 4"]
+    networks:
+      - lbnet
+
+  echo-backend1:
     build:
       context: ./backends/echo_backend
-    container_name: backend3
+    container_name: echo-backend1
+    command: ["./echo_backend", "9001", "Echo 1:"]
+    networks:
+      - lbnet
+
+  echo-backend2:
+    build:
+      context: ./backends/echo_backend
+    container_name: echo-backend2
+    command: ["./echo_backend", "9001", "Echo 2:"]
+    networks:
+      - lbnet
+
+  echo-backend3:
+    build:
+      context: ./backends/echo_backend
+    container_name: echo-backend3
     command: ["./echo_backend", "9001", "Echo 3:"]
     networks:
       - lbnet
 
-  backend4:
+  echo-backend4:
     build:
       context: ./backends/echo_backend
-    container_name: backend4
-    command: [ "./echo_backend", "9001", "Echo 4:" ]
+    container_name: echo-backend4
+    command: ["./echo_backend", "9001", "Echo 4:"]
+    networks:
+      - lbnet
+
+  echo-backend5:
+    build:
+      context: ./backends/echo_backend
+    container_name: echo-backend5
+    command: ["./echo_backend", "9001", "Echo 5:"]
     networks:
       - lbnet
 

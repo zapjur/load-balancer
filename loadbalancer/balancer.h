@@ -1,7 +1,7 @@
 #ifndef BALANCER_H
 #define BALANCER_H
 
-#define MAX_BACKENDS 10
+#define MAX_BACKENDS 20
 #define MAX_GROUPS 10
 
 typedef enum {
@@ -17,7 +17,7 @@ typedef struct {
 } Backend;
 
 typedef struct {
-    char *group_name;
+    char group_name[32];
     Backend backends[MAX_BACKENDS];
     int count;
     int rr_index;

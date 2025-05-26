@@ -12,45 +12,62 @@ static int group_count = 0;
 static pthread_mutex_t conn_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void init_backend_groups() {
-    BackendGroup simple = {
-      .group_name = "simple",
-      .strategy = ROUND_ROBIN,
-      .count = 2,
-      .rr_index = 0
-    };
+    FILE *file = fopen("backends.conf", "r");
+    if (!file) {
+        perror("fopen");
+        exit(EXIT_FAILURE);
+    }
 
-    simple.backends[0] = (Backend) {
-        .host = "backend1",
-        .port = 9001,
-        .active_connections = 0
-    };
+    char group[32], host[64];
+    int port;
 
-    simple.backends[1] = (Backend) {
-            .host = "backend2",
-            .port = 9001,
-            .active_connections = 0
-    };
-    backend_groups[group_count++] = simple;
+    while (fscanf(file, "%31s %63s %d", group, host, &port) == 3) {
+        if (group_count >= MAX_GROUPS) {
+            fprintf(stderr, "Too many groups (max %d)\n", MAX_GROUPS);
+            break;
+        }
 
-    BackendGroup echo = {
-            .group_name = "echo",
-            .strategy = LEAST_CONNECTIONS,
-            .count = 2,
-            .rr_index = 0
-    };
-    echo.backends[0] = (Backend) {
-            .host = "backend3",
-            .port = 9001,
-            .active_connections = 0
-    };
+        BackendGroup *group_ptr = NULL;
 
-    echo.backends[1] = (Backend) {
-            .host = "backend4",
-            .port = 9001,
-            .active_connections = 0
-    };
-    backend_groups[group_count++] = echo;
+        for (int i = 0; i < group_count; i++) {
+            if (strcmp(backend_groups[i].group_name, group) == 0) {
+                group_ptr = &backend_groups[i];
+                break;
+            }
+        }
+
+        if (!group_ptr) {
+            group_ptr = &backend_groups[group_count++];
+            memset(group_ptr, 0, sizeof(BackendGroup));
+            strncpy(group_ptr->group_name, group, sizeof(group_ptr->group_name) - 1);
+            group_ptr->strategy = strcmp(group, "simple") == 0 ? ROUND_ROBIN : LEAST_CONNECTIONS;
+        }
+
+        if (group_ptr->count >= MAX_BACKENDS) {
+            fprintf(stderr, "Too many backends in group %s (max %d)\n", group, MAX_BACKENDS);
+            continue;
+        }
+
+        int idx = group_ptr->count++;
+
+        Backend *b = &group_ptr->backends[idx];
+        b->host = strdup(host);
+        if (!b->host) {
+            fprintf(stderr, "strdup failed\n");
+            exit(EXIT_FAILURE);
+        }
+
+        b->port = port;
+        b->active_connections = 0;
+        b->is_alive = 1;
+
+        printf("Loaded backend: group=%s host=%s port=%d\n", group, host, port);
+    }
+
+    fclose(file);
 }
+
+
 
 Backend *get_backend_for_group(const char *group_name) {
     for (int i = 0; i < group_count; i++) {
