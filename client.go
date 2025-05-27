@@ -13,13 +13,14 @@ const (
 	simplePort = 8080
 	echoPort   = 8081
 
-	simpleRate   = 1 * time.Second
-	echoRate     = 3 * time.Second
-	numEchoConns = 100
+	simpleRate = 1 * time.Second
+	echoRate   = 3 * time.Second
 )
 
-func sendSimpleLoop(wg *sync.WaitGroup) {
-	defer wg.Done()
+var echoCounter int
+var mu sync.Mutex
+
+func sendSimpleLoop() {
 	counter := 0
 	for {
 		counter++
@@ -45,8 +46,7 @@ func sendSimpleLoop(wg *sync.WaitGroup) {
 	}
 }
 
-func echoPersistentClient(id int, wg *sync.WaitGroup) {
-	defer wg.Done()
+func echoPersistentClient(id int) {
 	conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", echoPort))
 	if err != nil {
 		fmt.Printf("[ECHO %d] Conn error: %v\n", id, err)
@@ -55,7 +55,6 @@ func echoPersistentClient(id int, wg *sync.WaitGroup) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
-
 	ticker := time.NewTicker(echoRate)
 	defer ticker.Stop()
 
@@ -80,7 +79,7 @@ func echoPersistentClient(id int, wg *sync.WaitGroup) {
 			fmt.Printf("[ECHO %d] Resp: %s", id, resp)
 
 			if rand.Float64() < 0.1 {
-				fmt.Printf("[ECHO %d] Closing connection randomly\n", id)
+				fmt.Printf("[ECHO %d] Random disconnect\n", id)
 				return
 			}
 		}
@@ -89,16 +88,16 @@ func echoPersistentClient(id int, wg *sync.WaitGroup) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go sendSimpleLoop(&wg)
+	go sendSimpleLoop()
 
-	for i := 1; i <= numEchoConns; i++ {
-		wg.Add(1)
-		go echoPersistentClient(i, &wg)
-		time.Sleep(300 * time.Millisecond)
+	for {
+		mu.Lock()
+		echoCounter++
+		id := echoCounter
+		mu.Unlock()
+
+		go echoPersistentClient(id)
+		time.Sleep(1 * time.Second)
 	}
-
-	wg.Wait()
 }
